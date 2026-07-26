@@ -33,6 +33,7 @@ from openpilot.selfdrive.controls.lib.drive_helpers import get_accel_from_plan, 
 from openpilot.selfdrive.modeld.parse_model_outputs import Parser
 from openpilot.selfdrive.modeld.fill_model_msg import fill_model_msg, fill_pose_msg, PublishState
 from openpilot.common.file_chunker import read_file_chunked
+from openpilot.selfdrive.modeld.tinygrad_helpers import visionbuf_to_tensor
 from openpilot.selfdrive.modeld.constants import ModelConstants, Plan
 
 
@@ -210,7 +211,7 @@ class ModelState:
       # There is a ringbuffer of imgs, just cache tensors pointing to all of them
       cache_key = (key, ptr)
       if cache_key not in self._blob_cache:
-        self._blob_cache[cache_key] = Tensor.from_blob(ptr, (yuv_size,), dtype='uint8')
+        self._blob_cache[cache_key] = visionbuf_to_tensor(bufs[key], yuv_size)
       self.full_frames[key] = self._blob_cache[cache_key]
     for key in bufs.keys():
       self.transforms_np[key][:,:] = transforms[key][:,:]
