@@ -15,10 +15,8 @@ def estimate_pickle_max_size(onnx_size):
 
 # compile warp
 # THREADS=0 is need to prevent bug: https://github.com/tinygrad/tinygrad/issues/14689
-if arch == 'larch64' and os.path.exists('/dev/kgsl-3d0'):
+if arch == 'larch64':
   tg_flags = 'DEV=QCOM FLOAT16=1 NOLOCALS=1 JIT_BATCH_SIZE=0'
-elif arch == 'larch64':
-  tg_flags = 'DEV=MSM+QCOM FLOAT16=1 NOLOCALS=1 JIT_BATCH_SIZE=0'
 elif arch == 'Darwin':
   tg_flags = f'DEV=CPU THREADS=0 HOME={os.path.expanduser("~")}'
 else:
@@ -33,7 +31,7 @@ for model_name in ['driving_vision', 'driving_policy', 'dmonitoring_model']:
 
 # IMAGE=2 causes GPU translation faults on MSM DRM (IOVAs above 4GB range)
 image_flag = {
-     'larch64': 'IMAGE=1' if 'DEV=MSM' in tg_flags else 'IMAGE=2',
+     'larch64': 'IMAGE=2' if os.path.exists('/dev/kgsl-3d0') else 'IMAGE=1',
 }.get(arch, 'IMAGE=0')
 script_files = [File(Dir("#selfdrive/modeld").File("compile_warp.py").abspath)]
 compile_warp_cmd = f'{tg_flags} python3 {Dir("#selfdrive/modeld").abspath}/compile_warp.py '

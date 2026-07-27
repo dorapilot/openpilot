@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 import os
 from openpilot.system.hardware import TICI
-if TICI and os.path.exists('/dev/kgsl-3d0'):
+if TICI:
   os.environ['DEV'] = 'QCOM'
-elif TICI:
-  os.environ['DEV'] = 'MSM+QCOM'
 else:
   os.environ['DEV'] = 'CPU'
 USBGPU = "USBGPU" in os.environ
