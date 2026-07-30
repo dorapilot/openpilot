@@ -387,6 +387,8 @@ class Tici(HardwareBase):
       if os.path.exists(path):
         gov = 'ondemand' if powersave_enabled else 'performance'
         sudo_write(gov, path)
+        if not powersave_enabled:
+          sudo_write('1689600', f'/sys/devices/system/cpu/cpufreq/policy{n}/scaling_max_freq')
 
     # *** IRQ config ***
 
@@ -441,6 +443,14 @@ class Tici(HardwareBase):
       sudo_write("1000", "/sys/class/kgsl/kgsl-3d0/idle_timer")
       sudo_write("performance", "/sys/class/kgsl/kgsl-3d0/devfreq/governor")
       sudo_write("710", "/sys/class/kgsl/kgsl-3d0/max_clock_mhz")
+    elif os.path.exists("/sys/class/devfreq/5000000.gpu"):
+      # Match KGSL pwrlevel 1 on SDM845.
+      sudo_write("on", "/sys/bus/platform/devices/5000000.gpu/power/control")
+      sudo_write("1000", "/sys/bus/platform/devices/5000000.gpu/power/autosuspend_delay_ms")
+      sudo_write("userspace", "/sys/class/devfreq/5000000.gpu/governor")
+      sudo_write("675000000", "/sys/class/devfreq/5000000.gpu/max_freq")
+      sudo_write("675000000", "/sys/class/devfreq/5000000.gpu/min_freq")
+      sudo_write("675000000", "/sys/class/devfreq/5000000.gpu/userspace/set_freq")
 
     # Qualcomm devfreq governors (downstream only)
     for devfreq_path in ("/sys/class/devfreq/soc:qcom,cpubw/governor",
