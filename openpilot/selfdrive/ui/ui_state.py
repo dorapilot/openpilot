@@ -1,4 +1,5 @@
 import numpy as np
+import pyray as rl
 import time
 import threading
 from collections.abc import Callable
@@ -379,7 +380,10 @@ class Device:
     if on != self._awake:
       self._awake = on
       cloudlog.debug(f"setting display power {int(on)}")
-      HARDWARE.set_display_power(on)
+      if on:
+        rl.clear_window_state(rl.ConfigFlags.FLAG_WINDOW_HIDDEN)
+      else:
+        rl.set_window_state(rl.ConfigFlags.FLAG_WINDOW_HIDDEN)
       gui_app.set_should_render(on)
 
 
