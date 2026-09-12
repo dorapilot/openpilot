@@ -234,10 +234,6 @@ msgstr "实验模式已开启"
 msgid "Enable"
 msgstr "启用"
 
-#: openpilot/selfdrive/ui/layouts/settings/developer.py
-msgid "Enable ADB"
-msgstr "启用 ADB"
-
 #: openpilot/selfdrive/ui/layouts/settings/toggles.py
 msgid "Enable Lane Departure Warnings"
 msgstr "启用车道偏离警示"
@@ -253,6 +249,10 @@ msgstr "启用 SSH"
 #: openpilot/system/ui/widgets/network.py
 msgid "Enable Tethering"
 msgstr "启用网络共享"
+
+#: openpilot/selfdrive/ui/layouts/settings/developer.py
+msgid "Enable USB Networking"
+msgstr ""
 
 #: openpilot/selfdrive/ui/layouts/settings/toggles.py
 msgid "Enable driver monitoring even when openpilot is not engaged."
@@ -620,6 +620,10 @@ msgstr "卸载"
 #: openpilot/selfdrive/ui/layouts/home.py
 msgid "UPDATE"
 msgstr "更新"
+
+#: openpilot/selfdrive/ui/layouts/settings/developer.py
+msgid "USB NCM networking allows connecting to your device over USB for SSH access. See https://docs.comma.ai/how-to/connect-to-comma for more info."
+msgstr ""
 
 #: openpilot/selfdrive/ui/layouts/settings/software.py
 msgid "Uninstall"

@@ -65,10 +65,10 @@ class DeveloperLayoutMici(NavScroller):
                                    description="Grant SSH access to all public keys in your GitHub settings. Only enter your own username.")
     self._ssh_keys_btn.set_click_callback(ssh_keys_callback)
 
-    # adb, ssh, ssh keys, debug mode, joystick debug mode, longitudinal maneuver mode, ip address
+    # usb networking, ssh, ssh keys, debug mode, joystick debug mode, longitudinal maneuver mode, ip address
     # ******** Main Scroller ********
-    self._adb_toggle = BigCircleParamControl(gui_app.texture("icons_mici/adb_short.png", 82, 82), "AdbEnabled", icon_offset=(0, 12),
-                                             description="Use Android Debug Bridge (ADB) over USB or the network.", title="enable ADB")
+    self._usb_ncm_toggle = BigCircleParamControl(gui_app.texture("icons_mici/usb.png", 82, 82), "UsbNcmEnabled", icon_offset=(0, 12),
+                                             description="Connect over USB using SSH.", title="USB networking")
     self._ssh_toggle = BigCircleParamControl(gui_app.texture("icons_mici/ssh_short.png", 82, 82), "SshEnabled", icon_offset=(0, 12),
                                              description="Access the device remotely using your SSH keys.", title="enable SSH")
     self._joystick_toggle = BigToggle("joystick debug\nmode", initial_state=ui_state.params.get_bool("JoystickDebugMode"),
@@ -88,7 +88,7 @@ class DeveloperLayoutMici(NavScroller):
                                               description="Show touch locations and the UI frame rate.")
 
     self._scroller.add_widgets([
-      self._adb_toggle,
+      self._usb_ncm_toggle,
       self._ssh_toggle,
       self._ssh_keys_btn,
       self._joystick_toggle,
@@ -100,7 +100,7 @@ class DeveloperLayoutMici(NavScroller):
 
     # Toggle lists
     self._refresh_toggles = (
-      ("AdbEnabled", self._adb_toggle),
+      ("UsbNcmEnabled", self._usb_ncm_toggle),
       ("SshEnabled", self._ssh_toggle),
       ("JoystickDebugMode", self._joystick_toggle),
       ("LongitudinalManeuverMode", self._long_maneuver_toggle),
@@ -108,7 +108,7 @@ class DeveloperLayoutMici(NavScroller):
       ("AlphaLongitudinalEnabled", self._alpha_long_toggle),
       ("ShowDebugInfo", self._debug_mode_toggle),
     )
-    onroad_blocked_toggles = (self._adb_toggle, self._joystick_toggle)
+    onroad_blocked_toggles = (self._usb_ncm_toggle, self._joystick_toggle)
     release_blocked_toggles = (self._joystick_toggle, self._long_maneuver_toggle, self._lat_maneuver_toggle, self._alpha_long_toggle)
     engaged_blocked_toggles = (self._long_maneuver_toggle, self._lat_maneuver_toggle, self._alpha_long_toggle)
 

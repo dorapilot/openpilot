@@ -529,7 +529,7 @@ msgid " Steering torque response calibration is {}% complete."
 msgstr ""
 
 #: openpilot/selfdrive/ui/layouts/settings/developer.py
-msgid "Enable ADB"
+msgid "Enable USB Networking"
 msgstr ""
 
 #: openpilot/selfdrive/ui/layouts/settings/developer.py
@@ -813,5 +813,9 @@ msgstr ""
 
 #: openpilot/selfdrive/ui/onroad/alert_renderer.py
 msgid "Reboot Device"
+msgstr ""
+
+#: openpilot/selfdrive/ui/layouts/settings/developer.py
+msgid "USB NCM networking allows connecting to your device over USB for SSH access. See https://docs.comma.ai/how-to/connect-to-comma for more info."
 msgstr ""
 
