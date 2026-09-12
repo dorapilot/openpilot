@@ -117,6 +117,8 @@ def init_egl() -> bool:
     _egl.create_image_khr = _egl.ffi.cast("PFNEGLCREATEIMAGEKHRPROC", _get_proc(b"eglCreateImageKHR"))
     _egl.destroy_image_khr = _egl.ffi.cast("PFNEGLDESTROYIMAGEKHRPROC", _get_proc(b"eglDestroyImageKHR"))
     _egl.image_target_texture = _egl.ffi.cast("PFNGLEGLIMAGETARGETTEXTURE2DOESPROC", _get_proc(b"glEGLImageTargetTexture2DOES"))
+    if any(fn == _egl.ffi.NULL for fn in (_egl.create_image_khr, _egl.destroy_image_khr, _egl.image_target_texture)):
+      raise RuntimeError("Required EGL image extensions are unavailable")
 
     # Initialize EGL display once here
     _egl.display = _egl.get_current_display()
