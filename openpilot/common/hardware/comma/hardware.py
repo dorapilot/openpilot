@@ -271,30 +271,35 @@ class HardwareComma(HardwareBase):
                          gnss=gnss,
                          bottomSoc=bottomSoc)
 
+  @cached_property
+  def _backlight_path(self):
+    mainline = "/sys/class/backlight/ae94000.dsi.0"
+    return mainline if os.path.isdir(mainline) else "/sys/class/backlight/panel0-backlight"
+
   def set_display_power(self, on):
     try:
-      with open("/sys/class/backlight/panel0-backlight/bl_power", "w") as f:
+      with open(f"{self._backlight_path}/bl_power", "w") as f:
         f.write("0" if on else "4")
     except Exception:
       pass
 
   def set_screen_brightness(self, percentage):
     try:
-      with open("/sys/class/backlight/panel0-backlight/max_brightness") as f:
+      with open(f"{self._backlight_path}/max_brightness") as f:
         max_brightness = float(f.read().strip())
 
       val = int(percentage * (max_brightness / 100.))
-      with open("/sys/class/backlight/panel0-backlight/brightness", "w") as f:
+      with open(f"{self._backlight_path}/brightness", "w") as f:
         f.write(str(val))
     except Exception:
       pass
 
   def get_screen_brightness(self):
     try:
-      with open("/sys/class/backlight/panel0-backlight/max_brightness") as f:
+      with open(f"{self._backlight_path}/max_brightness") as f:
         max_brightness = float(f.read().strip())
 
-      with open("/sys/class/backlight/panel0-backlight/brightness") as f:
+      with open(f"{self._backlight_path}/brightness") as f:
         return int(float(f.read()) / (max_brightness / 100.))
     except Exception:
       return 0
@@ -316,11 +321,12 @@ class HardwareComma(HardwareBase):
     for n in ('0', '4'):
       if powersave_enabled and n == '4':
         continue
-      gov = 'ondemand' if powersave_enabled else 'performance'
-      sudo_write(gov, f'/sys/devices/system/cpu/cpufreq/policy{n}/scaling_governor')
-      if not powersave_enabled:
-        # cap max core freq to 1689 Mhz
-        sudo_write('1689600', f'/sys/devices/system/cpu/cpufreq/policy{n}/scaling_max_freq')
+      path = f'/sys/devices/system/cpu/cpufreq/policy{n}/scaling_governor'
+      if os.path.exists(path):
+        gov = 'ondemand' if powersave_enabled else 'performance'
+        sudo_write(gov, path)
+        if not powersave_enabled:
+          sudo_write('1689600', f'/sys/devices/system/cpu/cpufreq/policy{n}/scaling_max_freq')
 
     # *** IRQ config ***
 
@@ -354,33 +360,47 @@ class HardwareComma(HardwareBase):
     # *** IRQ config ***
 
     # mask off big cluster from default affinity
-    sudo_write("f", "/proc/irq/default_smp_affinity")
+    if os.path.exists("/proc/irq/default_smp_affinity"):
+      sudo_write("f", "/proc/irq/default_smp_affinity")
 
     # move these off the default core
     affine_irq(1, "msm_vidc")  # encoders
     affine_irq(1, "i2c_geni")  # sensors
 
     # *** GPU config ***
-    # https://github.com/commaai/agnos-kernel-sdm845/blob/master/arch/arm64/boot/dts/qcom/sdm845-gpu.dtsi#L216
     affine_irq(5, "fts_ts")    # touch
     affine_irq(5, "msm_drm")   # display
-    sudo_write("1", "/sys/class/kgsl/kgsl-3d0/min_pwrlevel")
-    sudo_write("1", "/sys/class/kgsl/kgsl-3d0/max_pwrlevel")
-    sudo_write("1", "/sys/class/kgsl/kgsl-3d0/force_bus_on")
-    sudo_write("1", "/sys/class/kgsl/kgsl-3d0/force_clk_on")
-    sudo_write("1", "/sys/class/kgsl/kgsl-3d0/force_rail_on")
-    sudo_write("1000", "/sys/class/kgsl/kgsl-3d0/idle_timer")
-    sudo_write("performance", "/sys/class/kgsl/kgsl-3d0/devfreq/governor")
-    sudo_write("710", "/sys/class/kgsl/kgsl-3d0/max_clock_mhz")
 
-    # setup governors
-    sudo_write("performance", "/sys/class/devfreq/soc:qcom,cpubw/governor")
-    sudo_write("performance", "/sys/class/devfreq/soc:qcom,memlat-cpu0/governor")
-    sudo_write("performance", "/sys/class/devfreq/soc:qcom,memlat-cpu4/governor")
+    # KGSL (downstream Qualcomm GPU driver)
+    if os.path.exists("/sys/class/kgsl/kgsl-3d0"):
+      sudo_write("1", "/sys/class/kgsl/kgsl-3d0/min_pwrlevel")
+      sudo_write("1", "/sys/class/kgsl/kgsl-3d0/max_pwrlevel")
+      sudo_write("1", "/sys/class/kgsl/kgsl-3d0/force_bus_on")
+      sudo_write("1", "/sys/class/kgsl/kgsl-3d0/force_clk_on")
+      sudo_write("1", "/sys/class/kgsl/kgsl-3d0/force_rail_on")
+      sudo_write("1000", "/sys/class/kgsl/kgsl-3d0/idle_timer")
+      sudo_write("performance", "/sys/class/kgsl/kgsl-3d0/devfreq/governor")
+      sudo_write("710", "/sys/class/kgsl/kgsl-3d0/max_clock_mhz")
+    elif os.path.exists("/sys/class/devfreq/5000000.gpu"):
+      # Match KGSL pwrlevel 1 on SDM845.
+      sudo_write("on", "/sys/bus/platform/devices/5000000.gpu/power/control")
+      sudo_write("1000", "/sys/bus/platform/devices/5000000.gpu/power/autosuspend_delay_ms")
+      sudo_write("userspace", "/sys/class/devfreq/5000000.gpu/governor")
+      sudo_write("675000000", "/sys/class/devfreq/5000000.gpu/max_freq")
+      sudo_write("675000000", "/sys/class/devfreq/5000000.gpu/min_freq")
+      sudo_write("675000000", "/sys/class/devfreq/5000000.gpu/userspace/set_freq")
 
-    # *** VIDC (encoder) config ***
-    sudo_write("N", "/sys/kernel/debug/msm_vidc/clock_scaling")
-    sudo_write("Y", "/sys/kernel/debug/msm_vidc/disable_thermal_mitigation")
+    # Qualcomm devfreq governors (downstream only)
+    for devfreq_path in ("/sys/class/devfreq/soc:qcom,cpubw/governor",
+                         "/sys/class/devfreq/soc:qcom,memlat-cpu0/governor",
+                         "/sys/class/devfreq/soc:qcom,memlat-cpu4/governor"):
+      if os.path.exists(devfreq_path):
+        sudo_write("performance", devfreq_path)
+
+    # VIDC encoder config (downstream only)
+    if os.path.exists("/sys/kernel/debug/msm_vidc"):
+      sudo_write("N", "/sys/kernel/debug/msm_vidc/clock_scaling")
+      sudo_write("Y", "/sys/kernel/debug/msm_vidc/disable_thermal_mitigation")
 
     # pandad core
     affine_irq(3, "spi_geni")         # SPI

@@ -257,6 +257,11 @@ function op_venv() {
   esac
 }
 
+function op_shell() {
+  op_before_cmd
+  op_run_command tools/scripts/usb_ssh.sh "$@"
+}
+
 function op_adb() {
   op_before_cmd
   op_run_command tools/scripts/adb_ssh.sh "$@"
@@ -405,14 +410,22 @@ function op_start() {
   if [[ -f "/AGNOS" ]]; then
     op_before_cmd
     op_check_agnos_update
-    op_run_command sudo systemctl restart comma "$@"
+    if [[ -d /etc/runit ]]; then
+      op_run_command sudo sv restart comma "$@"
+    else
+      op_run_command sudo systemctl restart comma "$@"
+    fi
   fi
 }
 
 function op_stop() {
   if [[ -f "/AGNOS" ]]; then
     op_before_cmd
-    op_run_command sudo systemctl stop comma "$@"
+    if [[ -d /etc/runit ]]; then
+      op_run_command sudo sv stop comma "$@"
+    else
+      op_run_command sudo systemctl stop comma "$@"
+    fi
   fi
 }
 
@@ -443,6 +456,7 @@ function op_default() {
   echo -e "  ${BOLD}cabana${NC}       Run Cabana"
   echo -e "  ${BOLD}clip${NC}         Run clip (linux only)"
   echo -e "  ${BOLD}docs${NC}         Build or serve the openpilot documentation"
+  echo -e "  ${BOLD}shell${NC}        SSH into a USB-connected comma device"
   echo -e "  ${BOLD}adb${NC}          Run adb shell"
   echo -e "  ${BOLD}ssh${NC}          comma prime SSH helper"
   echo ""
@@ -505,6 +519,7 @@ function _op() {
     stop )          shift 1; op_stop "$@" ;;
     restart )       shift 1; op_restart "$@" ;;
     post-commit )   shift 1; op_install_post_commit "$@" ;;
+    shell )         shift 1; op_shell "$@" ;;
     adb )           shift 1; op_adb "$@" ;;
     ssh )           shift 1; op_ssh "$@" ;;
     script )        shift 1; op_script "$@" ;;
