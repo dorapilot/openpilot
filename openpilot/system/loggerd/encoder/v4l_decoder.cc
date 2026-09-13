@@ -17,10 +17,14 @@ constexpr int OFFLINE_CORE_PLACEMENT_RATE = 80 << 16;
 // echo "0xFFFF" > /sys/kernel/debug/msm_vidc/debug_level
 
 static void copyBuffer(VisionBuf *src_buf, VisionBuf *dst_buf) {
+  src_buf->begin_cpu_access();
+  dst_buf->begin_cpu_access(true);
   // Copy Y plane
   memcpy(dst_buf->y, src_buf->y, src_buf->height * src_buf->stride);
   // Copy UV plane
   memcpy(dst_buf->uv, src_buf->uv, src_buf->height / 2 * src_buf->stride);
+  dst_buf->end_cpu_access(true);
+  src_buf->end_cpu_access();
 }
 
 static void request_buffers(int fd, v4l2_buf_type buf_type, unsigned int count) {
@@ -312,7 +316,9 @@ bool V4LDecoder::sendPacket(int buf_index, const AVPacket *pkt, uint64_t token) 
   assert((size_t)pkt->size <= (size_t)this->out_buf_size);
   // Prepare output buffer
   uint8_t * data = (uint8_t *)this->out_bufs[buf_index].addr;
+  this->out_bufs[buf_index].begin_cpu_access(true);
   memcpy(data, pkt->data, pkt->size);
+  this->out_bufs[buf_index].end_cpu_access(true);
   queueOutputBuffer(buf_index, pkt->size, token);
   return true;
 }

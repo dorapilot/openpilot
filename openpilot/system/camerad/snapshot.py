@@ -37,10 +37,11 @@ def extract_image(buf):
   uv_height = ((buf.height // 2) + 15) // 16 * 16
   uv_plane_size = buf.stride * uv_height
 
-  y = np.array(buf.data[:buf.uv_offset], dtype=np.uint8).reshape((-1, buf.stride))[:buf.height, :buf.width]
-  uv_data = buf.data[buf.uv_offset:buf.uv_offset + uv_plane_size]
-  u = np.array(uv_data[::2], dtype=np.uint8).reshape((-1, buf.stride//2))[:buf.height//2, :buf.width//2]
-  v = np.array(uv_data[1::2], dtype=np.uint8).reshape((-1, buf.stride//2))[:buf.height//2, :buf.width//2]
+  with buf.cpu_access() as data:
+    y = np.array(data[:buf.uv_offset], dtype=np.uint8).reshape((-1, buf.stride))[:buf.height, :buf.width]
+    uv_data = data[buf.uv_offset:buf.uv_offset + uv_plane_size]
+    u = np.array(uv_data[::2], dtype=np.uint8).reshape((-1, buf.stride//2))[:buf.height//2, :buf.width//2]
+    v = np.array(uv_data[1::2], dtype=np.uint8).reshape((-1, buf.stride//2))[:buf.height//2, :buf.width//2]
 
   return yuv_to_rgb(y, u, v)
 

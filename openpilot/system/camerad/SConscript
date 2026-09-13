@@ -6,3 +6,5 @@ if arch != "Darwin":
   camera_obj = env.Object(['cameras/camera_qcom2.cc', 'cameras/camera_common.cc', 'cameras/spectra.cc',
                            'cameras/cdm.cc', 'sensors/ox03c10.cc', 'sensors/os04c10.cc'])
   env.Program('camerad', ['main.cc', camera_obj], LIBS=libs)
+  if GetOption('extras') or 'openpilot/system/camerad/test/test_camera_common' in COMMAND_LINE_TARGETS:
+    env.Program('test/test_camera_common', ['test/test_camera_common.cc', camera_obj[1]], LIBS=[visionipc, messaging, common])

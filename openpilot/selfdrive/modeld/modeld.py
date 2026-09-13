@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 from collections.abc import Callable
+from contextlib import nullcontext
 import ctypes
 from functools import cached_property
 import os
 os.environ['GMMU'] = '0' # for chestnut fast loading, noop for qcom
 from tinygrad.device import Device
+from tinygrad.tensor import Tensor
 import usb1
 import struct
 import threading
@@ -28,7 +30,7 @@ from openpilot.common.transformations.model import get_warp_matrix
 from openpilot.selfdrive.controls.lib.desire_helper import DesireHelper
 from openpilot.selfdrive.controls.lib.drive_helpers import get_accel_from_plan, should_stop, smooth_value, get_curvature_from_plan
 from openpilot.selfdrive.modeld.parse_model_outputs import Parser
-from openpilot.selfdrive.modeld.compile_modeld import make_input_queues, nv12_copy_size, MODELD_INPUTS
+from openpilot.selfdrive.modeld.compile_modeld import make_input_queues, nv12_copy_size, MODELD_INPUTS, CAMERA_INPUTS
 from openpilot.selfdrive.modeld.fill_model_msg import fill_model_msg, fill_driving_model_data, fill_pose_msg, PublishState
 from openpilot.common.file_chunker import open_file_chunked
 from openpilot.common.hardware.usb import CHESTNUT_USB_IDS
@@ -178,6 +180,9 @@ class ModelState:
     jits = load_oob(open_file_chunked(modeld_pkl_path(chestnut)))
     input_devices = jits['input_devices']
     self.model_device = input_devices['model']
+    self.direct_camera_frames = jits.get('direct_camera_frames', False)
+    self._camera_server_id = None
+    self._blob_cache: dict[tuple[str, int], Tensor] = {}
     metadata = jits['metadata']
     self.input_shapes = metadata['input_shapes']
     self.vision_input_names = [k for k in self.input_shapes if 'img' in k]
@@ -189,7 +194,8 @@ class ModelState:
     self.frame_skip = ModelConstants.MODEL_RUN_FREQ // ModelConstants.MODEL_CONTEXT_FREQ
     self.frame_copy_size = nv12_copy_size(*get_nv12_info(cam_w, cam_h)[:3])
     self.input_queues, self.npy, self.frame_views = make_input_queues(
-      self.input_shapes, self.frame_skip, device=self.model_device, frame_copy_size=self.frame_copy_size)
+      self.input_shapes, self.frame_skip, device=self.model_device, frame_copy_size=self.frame_copy_size,
+      direct_camera_frames=self.direct_camera_frames)
     self.parser = Parser()
     self.run_model = jits['run_model'][(cam_w,cam_h)]
 
@@ -197,10 +203,27 @@ class ModelState:
     parsed_model_outputs = {k: model_outputs[np.newaxis, v] for k,v in output_slices.items()}
     return parsed_model_outputs
 
-  def run(self, bufs: dict[str, VisionBuf], transforms: dict[str, np.ndarray],
+  def run(self, bufs: dict[str, VisionBuf | np.ndarray], transforms: dict[str, np.ndarray],
           inputs: dict[str, np.ndarray], after_enqueue: Callable[[], None] | None = None) -> dict[str, np.ndarray]:
     for key, buf in bufs.items():
-      np.copyto(self.frame_views[key], np.frombuffer(buf.data, dtype=np.uint8, count=self.frame_copy_size))
+      if self.direct_camera_frames:
+        if isinstance(buf, VisionBuf):
+          if not buf.is_dma_buf:
+            raise RuntimeError("MSM camera input requires a DMA-BUF")
+          if self._camera_server_id != buf.server_id:
+            self._blob_cache.clear()
+            self._camera_server_id = buf.server_id
+          cache_key = (key, buf.idx)
+          if cache_key not in self._blob_cache:
+            ptr = np.frombuffer(buf.data, dtype=np.uint8).ctypes.data
+            self._blob_cache[cache_key] = Tensor.from_blob(ptr, (self.frame_copy_size,), fd=buf.fd, dtype='uint8', device=self.model_device)
+          frame = self._blob_cache[cache_key]
+        else:
+          frame = Tensor(buf, device='NPY').to(self.model_device).contiguous().realize()
+        self.input_queues['frame' if key == 'img' else 'big_frame'] = frame
+      else:
+        with buf.cpu_access() if isinstance(buf, VisionBuf) else nullcontext(buf.data) as data:
+          np.copyto(self.frame_views[key], np.frombuffer(data, dtype=np.uint8, count=self.frame_copy_size))
 
     # Model decides when action is completed, so desire input is just a pulse triggered on rising edge
     inputs['desire_pulse'][0] = 0
@@ -211,7 +234,8 @@ class ModelState:
     self.npy['tfm'][:,:] = transforms['img'][:,:]
     self.npy['big_tfm'][:,:] = transforms['big_img'][:,:]
 
-    outs, = self.run_model(**{k: self.input_queues[k] for k in MODELD_INPUTS})
+    input_keys = MODELD_INPUTS + (CAMERA_INPUTS if self.direct_camera_frames else [])
+    outs, = self.run_model(**{k: self.input_queues[k] for k in input_keys})
     if after_enqueue is not None:
       after_enqueue()
     model_output = outs.numpy()[0]
@@ -230,7 +254,8 @@ class ModelState:
     dims = {'desire_pulse': ModelConstants.DESIRE_LEN, 'traffic_convention': 2, 'action_t': 2}
     self.run(dummy_frames, dict.fromkeys(self.vision_input_names, eye), {k: np.zeros(v, dtype=np.float32) for k, v in dims.items()})
     self.input_queues, self.npy, self.frame_views = make_input_queues(
-      self.input_shapes, self.frame_skip, device=self.model_device, frame_copy_size=self.frame_copy_size)
+      self.input_shapes, self.frame_skip, device=self.model_device, frame_copy_size=self.frame_copy_size,
+      direct_camera_frames=self.direct_camera_frames)
     self.prev_desire[:] = 0
 
 

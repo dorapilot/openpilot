@@ -50,7 +50,9 @@ JpegEncoder::~JpegEncoder() {
 }
 
 void JpegEncoder::pushThumbnail(VisionBuf *buf, const VisionIpcBufExtra &extra) {
+  buf->begin_cpu_access();
   generateThumbnail(buf->y, buf->uv, buf->width, buf->height, buf->stride);
+  buf->end_cpu_access();
 
   MessageBuilder msg;
   auto thumbnaild = msg.initEvent().initThumbnail();

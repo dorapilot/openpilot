@@ -110,7 +110,7 @@ void V4LEncoder::dequeue_handler(V4LEncoder *e) {
       unsigned int bytesused, flags, index;
       struct timeval timestamp;
       dequeue_buffer(e->fd, V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE, &index, &bytesused, &flags, &timestamp);
-      e->buf_out[index].sync(VISIONBUF_SYNC_FROM_DEVICE);
+      e->buf_out[index].begin_cpu_access();
       uint8_t *buf = (uint8_t*)e->buf_out[index].addr;
       int64_t ts = timestamp.tv_sec * 1000000 + timestamp.tv_usec;
 
@@ -133,6 +133,7 @@ void V4LEncoder::dequeue_handler(V4LEncoder *e) {
         }
       }
 
+      e->buf_out[index].end_cpu_access();
       if (env_debug_encoder) {
         printf("%20s got(%d) %6d bytes flags %8x idx %3d/%4d id %8d ts %ld lat %.2f ms (%lu frames free)\n",
           e->encoder_info.publish_name, index, bytesused, flags, e->segment_num, idx, frame_id, ts, millis_since_boot()-(ts/1000.), e->free_buf_in.size());

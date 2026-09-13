@@ -63,7 +63,9 @@ kj::Array<uint8_t> get_raw_frame_image(const CameraBuf *b) {
   kj::Array<uint8_t> frame_image = kj::heapArray<uint8_t>(b->cur_camera_buf->len);
   uint8_t *resized_dat = frame_image.begin();
 
+  b->cur_camera_buf->begin_cpu_access();
   memcpy(resized_dat, dat, b->cur_camera_buf->len);
+  b->cur_camera_buf->end_cpu_access();
 
   return kj::mv(frame_image);
 }
@@ -74,13 +76,16 @@ float calculate_exposure_value(const CameraBuf *b, Rect ae_xywh, int x_skip, int
   const uint8_t *pix_ptr = b->cur_yuv_buf->y;
 
   unsigned int lum_total = 0;
+  b->cur_yuv_buf->begin_cpu_access();
   for (int y = ae_xywh.y; y < ae_xywh.y + ae_xywh.h; y += y_skip) {
     for (int x = ae_xywh.x; x < ae_xywh.x + ae_xywh.w; x += x_skip) {
-      uint8_t lum = pix_ptr[(y * b->out_img_width) + x];
+      uint8_t lum = pix_ptr[(y * b->cur_yuv_buf->stride) + x];
       lum_binning[lum]++;
       lum_total += 1;
     }
   }
+
+  b->cur_yuv_buf->end_cpu_access();
 
   // Find mean lumimance value
   unsigned int lum_cur = 0;

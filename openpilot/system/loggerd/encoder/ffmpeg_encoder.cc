@@ -86,12 +86,14 @@ int FfmpegEncoder::encode_frame(VisionBuf* buf, VisionIpcBufExtra *extra) {
   uint8_t *cy = convert_buf.data();
   uint8_t *cu = cy + in_width * in_height;
   uint8_t *cv = cu + (in_width / 2) * (in_height / 2);
+  buf->begin_cpu_access();
   yuv::nv12_to_i420(buf->y, buf->stride,
                     buf->uv, buf->stride,
                     cy, in_width,
                     cu, in_width/2,
                     cv, in_width/2,
                     in_width, in_height);
+  buf->end_cpu_access();
 
   if (downscale_buf.size() > 0) {
     uint8_t *out_y = downscale_buf.data();

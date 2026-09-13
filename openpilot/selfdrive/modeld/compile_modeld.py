@@ -38,6 +38,7 @@ from tinygrad.engine.jit import TinyJit
 
 NV12Frame = namedtuple("NV12Frame", ['width', 'height', 'stride', 'y_height', 'uv_height', 'size'])
 MODELD_INPUTS = ['img_q', 'big_img_q', 'feat_q', 'desire_q', 'packed_npy_inputs']
+CAMERA_INPUTS = ['frame', 'big_frame']
 
 
 def nv12_copy_size(stride: int, y_height: int, uv_height: int) -> int:
@@ -124,7 +125,7 @@ def get_policy_npy_shapes(input_shapes):
   return shapes, [math.prod(s) for s in shapes.values()]
 
 
-def make_input_queues(input_shapes, frame_skip, device, frame_copy_size):
+def make_input_queues(input_shapes, frame_skip, device, frame_copy_size, direct_camera_frames=False):
   img = input_shapes['img']  # (1, 12, 128, 256)
   fb = input_shapes['features_buffer']  # (1, T-1, ...), past features only; the model appends the current frame's feature
   feat_dim = math.prod(fb[2:])
@@ -136,9 +137,9 @@ def make_input_queues(input_shapes, frame_skip, device, frame_copy_size):
   shapes = {'tfm': (3, 3), 'big_tfm': (3, 3)} | policy_shapes
   sizes = [math.prod(s) for s in shapes.values()]
   packed_npy_size = sum(sizes) * np.dtype(np.float32).itemsize
-  packed_input = np.zeros(packed_npy_size + 2 * frame_copy_size, dtype=np.uint8)
+  packed_input = np.zeros(packed_npy_size + (0 if direct_camera_frames else 2 * frame_copy_size), dtype=np.uint8)
   packed_npy_inputs = packed_input[:packed_npy_size].view(np.float32)
-  frames = packed_input[packed_npy_size:]
+  frames = np.zeros(2 * frame_copy_size, dtype=np.uint8) if direct_camera_frames else packed_input[packed_npy_size:]
   frame_views = {'img': frames[:frame_copy_size], 'big_img': frames[frame_copy_size:]}
   # views into the packed inputs, to be refilled at runtime
   npy = {k: v.reshape(s) for (k, s), v in zip(shapes.items(), np.split(packed_npy_inputs, np.cumsum(sizes[:-1])), strict=True)}
@@ -149,6 +150,9 @@ def make_input_queues(input_shapes, frame_skip, device, frame_copy_size):
     'desire_q': Tensor(np.zeros((frame_skip * dp[1], dp[0], dp[2]), dtype=np.float32), device=device).contiguous().realize(),
     'packed_npy_inputs': Tensor(packed_input, device='NPY').realize(),
   }
+  if direct_camera_frames:
+    input_queues.update({k: Tensor(v, device='NPY').to(device).contiguous().realize()
+                         for k, v in zip(CAMERA_INPUTS, frame_views.values(), strict=True)})
   return input_queues, npy, frame_views
 
 
@@ -217,12 +221,13 @@ def make_run_model(warp, run_policy, model_metadata, frame_copy_size):
   _, policy_sizes = get_policy_npy_shapes(model_metadata['input_shapes'])
   packed_npy_size = (18 + sum(policy_sizes)) * np.dtype(np.float32).itemsize
 
-  def run_model(img_q, big_img_q, feat_q, desire_q, packed_npy_inputs):
+  def run_model(img_q, big_img_q, feat_q, desire_q, packed_npy_inputs, frame=None, big_frame=None):
     packed_input = packed_npy_inputs.to(Device.DEFAULT)
     Tensor.realize(packed_input)
     packed_npy_inputs = packed_input[:packed_npy_size].bitcast('float32')
-    frame = packed_input[packed_npy_size:packed_npy_size + frame_copy_size]
-    big_frame = packed_input[packed_npy_size + frame_copy_size:]
+    if frame is None:
+      frame = packed_input[packed_npy_size:packed_npy_size + frame_copy_size]
+      big_frame = packed_input[packed_npy_size + frame_copy_size:]
     tfm, big_tfm, policy_inputs = packed_npy_inputs.split([9, 9, sum(policy_sizes)])
     warped = warp(tfm.reshape(3, 3), big_tfm.reshape(3, 3), frame, big_frame)
     return run_policy(warped, img_q, big_img_q, feat_q, desire_q, policy_inputs)
@@ -243,6 +248,9 @@ def compile_jit(jit, input_keys, make_queues, benchmark_runs):
         v[:] = rng.standard_normal(v.shape).astype(v.dtype)
       for v in frame_views.values():
         v[:] = rng.integers(0, 256, size=v.shape, dtype=np.uint8)
+      if 'frame' in input_queues:
+        for key, value in zip(CAMERA_INPUTS, frame_views.values(), strict=True):
+          input_queues[key].assign(Tensor(value, device='NPY').to(Device.DEFAULT)).realize()
       Device.default.synchronize()
       st = time.perf_counter()
       outs = fn(**{k: input_queues[k] for k in input_keys})
@@ -309,9 +317,14 @@ if __name__ == "__main__":
   model_w, model_h = args.model_size
 
   model_runner = OnnxRunner(model_path)
+  direct_camera_frames = False
+  if Device.DEFAULT.split(':')[0] == 'QCOM':
+    from tinygrad.runtime.ops_qcom import MSMIface
+    direct_camera_frames = isinstance(Device.default.iface, MSMIface)
   out = {
     'metadata': make_metadata_dict(model_path),
     'input_devices': {'model': Device.DEFAULT},
+    'direct_camera_frames': direct_camera_frames,
     'run_model': {},
   }
 
@@ -321,10 +334,11 @@ if __name__ == "__main__":
     nv12 = NV12Frame(cam_w, cam_h, *get_nv12_info(cam_w, cam_h))
     frame_copy_size = nv12_copy_size(nv12.stride, nv12.y_height, nv12.uv_height)
     make_model_queues = partial(make_input_queues, out['metadata']['input_shapes'], args.frame_skip,
-                                frame_copy_size=frame_copy_size)
+                                frame_copy_size=frame_copy_size, direct_camera_frames=direct_camera_frames)
     warp = make_warp(nv12, model_w, model_h)
     run_model_jit = TinyJit(make_run_model(warp, run_policy, out['metadata'], frame_copy_size), prune=True)
-    out['run_model'][(cam_w,cam_h)] = compile_jit(run_model_jit, MODELD_INPUTS, make_model_queues,
+    input_keys = MODELD_INPUTS + (CAMERA_INPUTS if direct_camera_frames else [])
+    out['run_model'][(cam_w,cam_h)] = compile_jit(run_model_jit, input_keys, make_model_queues,
                                                   args.benchmark_runs)
 
   with open(args.output, "wb") as f:
