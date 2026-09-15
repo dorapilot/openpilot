@@ -1,6 +1,7 @@
 import os
 import fcntl
 import ctypes
+import glob
 
 # I2C constants from /usr/include/linux/i2c-dev.h
 I2C_SLAVE = 0x0703
@@ -14,6 +15,11 @@ I2C_SMBUS_BYTE_DATA = 2
 I2C_SMBUS_I2C_BLOCK_DATA = 8
 
 I2C_SMBUS_BLOCK_MAX = 32
+
+
+def get_i2c_bus(device: str, default: int) -> int:
+  buses = glob.glob(f'/sys/bus/platform/devices/{device}/i2c-*')
+  return int(os.path.basename(buses[0]).removeprefix('i2c-')) if buses else default
 
 
 class _I2cSmbusData(ctypes.Union):

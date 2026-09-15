@@ -3,7 +3,7 @@ import os
 import time
 from collections import namedtuple
 
-from openpilot.common.i2c import SMBus
+from openpilot.common.i2c import SMBus, get_i2c_bus
 
 # https://datasheets.maximintegrated.com/en/ds/MAX98089.pdf
 
@@ -76,6 +76,7 @@ class Amplifier:
 
   def __init__(self, debug=False):
     self.debug = debug
+    self.AMP_I2C_BUS = get_i2c_bus('a88000.i2c', self.AMP_I2C_BUS)
 
   @property
   def available(self) -> bool:

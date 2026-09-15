@@ -81,7 +81,8 @@ function launch {
   ln -sfn tinygrad_repo/tinygrad tinygrad
 
   # hardware specific init
-  if [ -f /AGNOS ]; then
+  # vamOS uses /AGNOS for hardware detection but manages its own OS updates.
+  if [ -f /AGNOS ] && ! grep -qsE '^ID=("void"|void)$' /etc/os-release; then
     agnos_init
   fi
 

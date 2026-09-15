@@ -77,7 +77,12 @@ def get_irqs_for_action(action: str) -> list[str]:
 
 # *** gpiochip ***
 
+def get_tlmm_gpiochip() -> int:
+  chips = globmod.glob('/sys/bus/platform/devices/3400000.pinctrl/gpiochip*')
+  return int(os.path.basename(chips[0]).removeprefix('gpiochip')) if chips else 0
+
 class gpioevent_data(ctypes.Structure):
+  # GPIO v1 and v2 events share this timestamp/id prefix.
   _fields_ = [
     ("timestamp", ctypes.c_uint64),
     ("id", ctypes.c_uint32),
@@ -92,18 +97,52 @@ class gpioevent_request(ctypes.Structure):
     ("fd", ctypes.c_int)
   ]
 
+class gpio_v2_line_config(ctypes.Structure):
+  _fields_ = [
+    ("flags", ctypes.c_uint64),
+    ("num_attrs", ctypes.c_uint32),
+    ("padding", ctypes.c_uint32 * 5),
+    # Ten 24-byte attribute slots; this request uses only the default flags.
+    ("attrs", ctypes.c_uint64 * 30),
+  ]
+
+class gpio_v2_line_request(ctypes.Structure):
+  _fields_ = [
+    ("offsets", ctypes.c_uint32 * 64),
+    ("consumer", ctypes.c_char * 32),
+    ("config", gpio_v2_line_config),
+    ("num_lines", ctypes.c_uint32),
+    ("event_buffer_size", ctypes.c_uint32),
+    ("padding", ctypes.c_uint32 * 5),
+    ("fd", ctypes.c_int32),
+  ]
+
 def gpiochip_get_ro_value_fd(label: str, gpiochip_id: int, pin: int) -> int:
   GPIOEVENT_REQUEST_BOTH_EDGES = 0x3
   GPIOHANDLE_REQUEST_INPUT = 0x1
   GPIO_GET_LINEEVENT_IOCTL = 0xc030b404
+  GPIO_V2_LINE_FLAG_INPUT = 0x4
+  GPIO_V2_LINE_FLAG_BOTH_EDGES = 0x30
+  GPIO_V2_GET_LINE_IOCTL = 0xc250b407
 
-  rq = gpioevent_request()
-  rq.lineoffset = pin
-  rq.handleflags = GPIOHANDLE_REQUEST_INPUT
-  rq.eventflags = GPIOEVENT_REQUEST_BOTH_EDGES
-  rq.label = label.encode('utf-8')[:31] + b'\0'
+  if tuple(map(int, os.uname().release.split('.')[:2])) >= (5, 10):
+    rq = gpio_v2_line_request()
+    rq.offsets[0] = pin
+    rq.num_lines = 1
+    rq.config.flags = GPIO_V2_LINE_FLAG_INPUT | GPIO_V2_LINE_FLAG_BOTH_EDGES
+    rq.consumer = label.encode('utf-8')[:31] + b'\0'
+    request = GPIO_V2_GET_LINE_IOCTL
+  else:
+    rq = gpioevent_request()
+    rq.lineoffset = pin
+    rq.handleflags = GPIOHANDLE_REQUEST_INPUT
+    rq.eventflags = GPIOEVENT_REQUEST_BOTH_EDGES
+    rq.label = label.encode('utf-8')[:31] + b'\0'
+    request = GPIO_GET_LINEEVENT_IOCTL
 
   fd = os.open(f"/dev/gpiochip{gpiochip_id}", os.O_RDONLY)
-  fcntl.ioctl(fd, GPIO_GET_LINEEVENT_IOCTL, rq)
-  os.close(fd)
+  try:
+    fcntl.ioctl(fd, request, rq)
+  finally:
+    os.close(fd)
   return int(rq.fd)

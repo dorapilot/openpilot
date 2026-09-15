@@ -99,12 +99,17 @@ class HardwareComma(HardwareBase):
   def get_serial(self):
     return self.get_cmdline()['androidboot.serialno']
 
+  @cached_property
+  def _power_monitor_path(self):
+    monitors = Path('/sys/bus/platform/devices/a88000.i2c').glob('i2c-*/*-0040/hwmon/hwmon*')
+    return next(monitors, Path('/sys/class/hwmon/hwmon1'))
+
   def get_voltage(self):
-    with open("/sys/class/hwmon/hwmon1/in1_input") as f:
+    with open(self._power_monitor_path / 'in1_input') as f:
       return int(f.read())
 
   def get_current(self):
-    with open("/sys/class/hwmon/hwmon1/curr1_input") as f:
+    with open(self._power_monitor_path / 'curr1_input') as f:
       return int(f.read())
 
   def set_ir_power(self, percent: int):
@@ -245,7 +250,7 @@ class HardwareComma(HardwareBase):
     return self.get_modem_state().get('temperatures', [])
 
   def get_current_power_draw(self):
-    return (self.read_param_file("/sys/class/hwmon/hwmon1/power1_input", int) / 1e6)
+    return (self.read_param_file(self._power_monitor_path / 'power1_input', int) / 1e6)
 
   def get_som_power_draw(self):
     return (self.read_param_file("/sys/class/power_supply/bms/voltage_now", int) * self.read_param_file("/sys/class/power_supply/bms/current_now", int) / 1e12)
@@ -254,6 +259,10 @@ class HardwareComma(HardwareBase):
     subprocess.run("sudo poweroff", shell=True)
 
   def get_thermal_config(self):
+    if os.path.isdir('/sys/bus/platform/devices/5000000.gpu'):
+      return ThermalConfig(cpu=[ThermalZone(f'cpu{i}-thermal') for i in range(8)],
+                           gpu=[ThermalZone('gpu-top-thermal'), ThermalZone('gpu-bottom-thermal')],
+                           dsp=ThermalZone('q6-hvx-thermal'), memory=ThermalZone('mem-thermal'))
     intake, exhaust, gnss, bottomSoc = None, None, None, None
     if self.get_device_type() == "mici":
       gnss = ThermalZone("gnss")
@@ -331,7 +340,7 @@ class HardwareComma(HardwareBase):
     # *** IRQ config ***
 
     # GPU, modeld core
-    affine_irq(7, "kgsl-3d0")
+    affine_irq(7, "gpu-irq" if os.path.isdir('/sys/bus/platform/devices/5000000.gpu') else "kgsl-3d0")
 
     # camerad core
     camera_irqs = ("a5", "cci", "cpas_camnoc", "cpas-cdm", "csid", "ife", "csid-lite", "ife-lite")
@@ -347,6 +356,7 @@ class HardwareComma(HardwareBase):
       return 0
 
   def initialize_hardware(self):
+    mainline = os.path.isdir('/sys/bus/platform/devices/5000000.gpu')
     if self.amplifier is not None:
       self.amplifier.initialize_configuration()
 
@@ -363,14 +373,15 @@ class HardwareComma(HardwareBase):
     if os.path.exists("/proc/irq/default_smp_affinity"):
       sudo_write("f", "/proc/irq/default_smp_affinity")
 
-    # move these off the default core
-    affine_irq(1, "msm_vidc")  # encoders
-    affine_irq(1, "i2c_geni")  # sensors
+    # Mainline MDSS child IRQs share a chained parent and cannot set affinity.
+    # encoders and I2C on core 1; touch on the UI core
+    irqs = ([(1, "venus"), (1, "890000.i2c"), (1, "894000.i2c"), (1, "a88000.i2c"),
+             (5, "s6sy761_irq")] if mainline else
+            [(1, "msm_vidc"), (1, "i2c_geni"), (5, "fts_ts"), (5, "msm_drm")])
+    for cpu, action in irqs:
+      affine_irq(cpu, action)
 
     # *** GPU config ***
-    affine_irq(5, "fts_ts")    # touch
-    affine_irq(5, "msm_drm")   # display
-
     # KGSL (downstream Qualcomm GPU driver)
     if os.path.exists("/sys/class/kgsl/kgsl-3d0"):
       sudo_write("1", "/sys/class/kgsl/kgsl-3d0/min_pwrlevel")
@@ -403,7 +414,7 @@ class HardwareComma(HardwareBase):
       sudo_write("Y", "/sys/kernel/debug/msm_vidc/disable_thermal_mitigation")
 
     # pandad core
-    affine_irq(3, "spi_geni")         # SPI
+    affine_irq(3, "880000.spi" if mainline else "spi_geni")
     try:
       pid = subprocess.check_output(["pgrep", "-f", "spi0"], encoding='utf8').strip()
       subprocess.call(["sudo", "chrt", "-f", "-p", "1", pid])
