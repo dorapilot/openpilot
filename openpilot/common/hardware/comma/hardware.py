@@ -198,11 +198,19 @@ class HardwareComma(HardwareBase):
       elif network_type == NetworkType.ethernet:
         network_strength = NetworkStrength.great
       elif network_type == NetworkType.wifi:
-        rssi = wpa_supplicant_cmd("SIGNAL_POLL").get("RSSI")
-        if rssi is not None:
-          dbm = int(rssi)
-          if -100 < dbm <= 0:
-            network_strength = self.parse_strength(120 + max(-100, min(-20, dbm)))
+        if os.path.isdir('/sys/bus/platform/devices/5000000.gpu'):
+          access_points = subprocess.check_output(['nmcli', '-t', '-f', 'IN-USE,SIGNAL', 'device', 'wifi', 'list',
+                                                   'ifname', 'wlan0', '--rescan', 'no'], encoding='utf-8', timeout=0.2)
+          for access_point in access_points.splitlines():
+            if access_point.startswith('*:'):
+              network_strength = self.parse_strength(int(access_point.split(':')[1]))
+              break
+        else:
+          rssi = wpa_supplicant_cmd("SIGNAL_POLL").get("RSSI")
+          if rssi is not None:
+            dbm = int(rssi)
+            if -100 < dbm <= 0:
+              network_strength = self.parse_strength(120 + max(-100, min(-20, dbm)))
       else:  # Cellular
         network_strength = self.parse_strength(self.get_modem_state().get('signal_quality', 0))
     except Exception:

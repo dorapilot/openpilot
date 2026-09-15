@@ -12,6 +12,28 @@ from openpilot.common.test import OpenpilotTestCase
 
 
 class TestMainlineHardware(OpenpilotTestCase):
+  def test_wifi_strength(self):
+    device = hardware.HardwareComma()
+    cases = [(' :82\n*:45\n :60\n', hardware.NetworkStrength.moderate),
+             (' :82\n', hardware.NetworkStrength.unknown),
+             ('*:0\n', hardware.NetworkStrength.poor),
+             ('*:85\n', hardware.NetworkStrength.great)]
+    with patch.object(hardware.os.path, 'isdir', return_value=True), \
+         patch.object(hardware, 'wpa_supplicant_cmd', side_effect=FileNotFoundError), \
+         patch.object(hardware.subprocess, 'check_output') as command:
+      for output, expected in cases:
+        with self.subTest(output=output):
+          command.return_value = output
+          self.assertEqual(device.get_network_strength(hardware.NetworkType.wifi), expected)
+      command.side_effect = hardware.subprocess.TimeoutExpired('nmcli', .2)
+      self.assertEqual(device.get_network_strength(hardware.NetworkType.wifi), hardware.NetworkStrength.unknown)
+
+    with patch.object(hardware.os.path, 'isdir', return_value=False), \
+         patch.object(hardware, 'wpa_supplicant_cmd', return_value={'RSSI': '-68'}), \
+         patch.object(hardware.subprocess, 'check_output') as command:
+      self.assertEqual(device.get_network_strength(hardware.NetworkType.wifi), hardware.NetworkStrength.good)
+      command.assert_not_called()
+
   def test_power_monitor_discovery(self):
     for mainline in (False, True):
       with self.subTest(mainline=mainline), tempfile.TemporaryDirectory() as directory:
