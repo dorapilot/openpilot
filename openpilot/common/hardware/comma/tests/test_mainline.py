@@ -45,7 +45,7 @@ class TestMainlineHardware(OpenpilotTestCase):
         device.initialize_hardware()
         device.set_power_save(False)
         expected = ([(1, 'venus'), (1, '890000.i2c'), (1, '894000.i2c'), (1, 'a88000.i2c'),
-                     (5, 's6sy761_irq'), (3, '880000.spi'), (7, 'gpu-irq')]
+                     (3, '880000.spi'), (5, 's6sy761_irq'), (7, 'gpu-irq')]
                     if mainline else [(1, 'msm_vidc'), (1, 'i2c_geni'), (5, 'fts_ts'), (5, 'msm_drm'), (3, 'spi_geni'), (7, 'kgsl-3d0')])
         expected += [(6, action) for action in ('a5', 'cci', 'cpas_camnoc', 'cpas-cdm', 'csid', 'ife', 'csid-lite', 'ife-lite')]
         self.assertEqual([c.args for c in irq.call_args_list], expected)
@@ -53,7 +53,7 @@ class TestMainlineHardware(OpenpilotTestCase):
   def test_mainline_power_save_irq_targets(self):
     device = hardware.HardwareComma()
     device.__dict__['amplifier'] = None
-    online = set(range(8))
+    online = set(range(4))
     assignments = []
 
     def write(value, path):
@@ -68,10 +68,15 @@ class TestMainlineHardware(OpenpilotTestCase):
     with patch.object(hardware.os.path, 'isdir', return_value=True), \
          patch.object(hardware.os.path, 'exists', return_value=False), \
          patch.object(hardware, 'sudo_write', side_effect=write), \
-         patch.object(hardware, 'affine_irq', side_effect=affine):
+         patch.object(hardware, 'affine_irq', side_effect=affine), \
+         patch.object(hardware, 'gpio_init'), patch.object(hardware, 'gpio_set'), \
+         patch.object(hardware.subprocess, 'run'), patch.object(hardware.subprocess, 'call'), \
+         patch.object(hardware.subprocess, 'check_output', return_value='123'):
+      device.initialize_hardware()
       for power_save in (False, True, False):
         device.set_power_save(power_save)
         self.assertEqual(online, set(range(4 if power_save else 8)))
+    self.assertEqual(assignments.count((5, 's6sy761_irq')), 2)
     self.assertEqual(assignments.count((7, 'gpu-irq')), 2)
     self.assertEqual(assignments.count((6, 'a5')), 2)
 

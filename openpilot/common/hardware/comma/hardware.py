@@ -343,6 +343,9 @@ class HardwareComma(HardwareBase):
       # CPU hotplug already moved these IRQs off the disabled big cluster.
       return
 
+    if mainline:
+      affine_irq(5, "s6sy761_irq")
+
     # GPU, modeld core
     affine_irq(7, "gpu-irq" if mainline else "kgsl-3d0")
 
@@ -378,9 +381,8 @@ class HardwareComma(HardwareBase):
       sudo_write("f", "/proc/irq/default_smp_affinity")
 
     # Mainline MDSS child IRQs share a chained parent and cannot set affinity.
-    # encoders and I2C on core 1; touch on the UI core
-    irqs = ([(1, "venus"), (1, "890000.i2c"), (1, "894000.i2c"), (1, "a88000.i2c"),
-             (5, "s6sy761_irq")] if mainline else
+    # encoders and I2C on core 1; mainline touch affinity follows CPU wake
+    irqs = ([(1, "venus"), (1, "890000.i2c"), (1, "894000.i2c"), (1, "a88000.i2c")] if mainline else
             [(1, "msm_vidc"), (1, "i2c_geni"), (5, "fts_ts"), (5, "msm_drm")])
     for cpu, action in irqs:
       affine_irq(cpu, action)
