@@ -31,11 +31,14 @@ public:
 
 private:
   int fd;
+  bool venus = false;
+  bool is_h265 = false;
 
   bool is_open = false;
   int segment_num = -1;
   int counter = 0;
   int current_bitrate = -1;
+  int drained_buf = -1;
   SafeQueue<VisionIpcBufExtra> extras;
   PacketCallback packet_callback;
   InputDoneCallback input_done_callback;
@@ -44,6 +47,7 @@ private:
   std::thread dequeue_handler_thread;
 
   VisionBuf buf_out[BUF_OUT_COUNT];
+  VisionBuf scaled_bufs[BUF_IN_COUNT];
   std::atomic<VisionBuf *> input_bufs[BUF_IN_COUNT] = {};
   SafeQueue<unsigned int> free_buf_in;
 };
