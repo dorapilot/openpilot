@@ -15,6 +15,11 @@ EGL_DMA_BUF_PLANE0_PITCH_EXT = 0x3274
 EGL_DMA_BUF_PLANE1_FD_EXT = 0x3275
 EGL_DMA_BUF_PLANE1_OFFSET_EXT = 0x3276
 EGL_DMA_BUF_PLANE1_PITCH_EXT = 0x3277
+EGL_DMA_BUF_PLANE0_MODIFIER_LO_EXT = 0x3443
+EGL_DMA_BUF_PLANE0_MODIFIER_HI_EXT = 0x3444
+EGL_DMA_BUF_PLANE1_MODIFIER_LO_EXT = 0x3445
+EGL_DMA_BUF_PLANE1_MODIFIER_HI_EXT = 0x3446
+EGL_EXTENSIONS = 0x3055
 EGL_NONE = 0x3038
 GL_TEXTURE0 = 0x84C0
 GL_TEXTURE_EXTERNAL_OES = 0x8D65
@@ -29,6 +34,7 @@ class EGLImage:
 
   egl_image: Any
   fd: int
+  texture_id: int = 0
 
 
 @dataclass
@@ -36,6 +42,7 @@ class EGLState:
   """Container for all EGL-related state"""
 
   initialized: bool = False
+  supports_dma_buf_modifiers: bool = False
   ffi: Any = None
   egl_lib: Any = None
   gles_lib: Any = None
@@ -86,10 +93,13 @@ def init_egl() -> bool:
       typedef void (*__eglMustCastToProperFunctionPointerType)(void);
 
       EGLDisplay eglGetCurrentDisplay(void);
+      const char *eglQueryString(EGLDisplay display, EGLint name);
       EGLint eglGetError(void);
       __eglMustCastToProperFunctionPointerType eglGetProcAddress(const char *procname);
       void glBindTexture(GLenum target, unsigned int texture);
       void glActiveTexture(GLenum texture);
+      void glGenTextures(int count, unsigned int *textures);
+      void glDeleteTextures(int count, const unsigned int *textures);
 
       // Function pointer types for EGL/GL extensions
       typedef EGLImageKHR (*PFNEGLCREATEIMAGEKHRPROC)(EGLDisplay, EGLContext, EGLenum, EGLClientBuffer, const EGLint *);
@@ -125,6 +135,8 @@ def init_egl() -> bool:
     if _egl.display == _egl.NO_DISPLAY:
       raise RuntimeError("Failed to get EGL display")
 
+    extensions = _egl.ffi.string(_egl.egl_lib.eglQueryString(_egl.display, EGL_EXTENSIONS)).split()
+    _egl.supports_dma_buf_modifiers = b'EGL_EXT_image_dma_buf_import_modifiers' in extensions
     _egl.initialized = True
     return True
   except Exception as e:
@@ -154,8 +166,12 @@ def create_egl_image(width: int, height: int, stride: int, fd: int, uv_offset: i
     EGL_DMA_BUF_PLANE1_FD_EXT, dup_fd,
     EGL_DMA_BUF_PLANE1_OFFSET_EXT, uv_offset,
     EGL_DMA_BUF_PLANE1_PITCH_EXT, stride,
-    EGL_NONE
   ]
+  if _egl.supports_dma_buf_modifiers:
+    # Camera planes are linear; DMA heaps do not provide driver layout metadata.
+    img_attrs += [EGL_DMA_BUF_PLANE0_MODIFIER_LO_EXT, 0, EGL_DMA_BUF_PLANE0_MODIFIER_HI_EXT, 0,
+                  EGL_DMA_BUF_PLANE1_MODIFIER_LO_EXT, 0, EGL_DMA_BUF_PLANE1_MODIFIER_HI_EXT, 0]
+  img_attrs.append(EGL_NONE)
 
   attr_array = _egl.ffi.new("int[]", img_attrs)
   egl_image = _egl.create_image_khr(_egl.display, _egl.NO_CONTEXT, EGL_LINUX_DMA_BUF_EXT, _egl.ffi.NULL, attr_array)
@@ -171,6 +187,9 @@ def create_egl_image(width: int, height: int, stride: int, fd: int, uv_offset: i
 def destroy_egl_image(egl_image: EGLImage) -> None:
   assert _egl.initialized, "EGL not initialized"
 
+  if egl_image.texture_id:
+    _egl.gles_lib.glDeleteTextures(1, _egl.ffi.new('unsigned int[]', [egl_image.texture_id]))
+    egl_image.texture_id = 0
   _egl.destroy_image_khr(_egl.display, egl_image.egl_image)
 
   # Close the duplicated fd we created in create_egl_image()
@@ -181,9 +200,14 @@ def destroy_egl_image(egl_image: EGLImage) -> None:
     pass
 
 
-def bind_egl_image_to_texture(texture_id: int, egl_image: EGLImage) -> None:
+def bind_egl_image(egl_image: EGLImage) -> None:
   assert _egl.initialized, "EGL not initialized"
 
+  if not egl_image.texture_id:
+    # External textures cannot reuse raylib's GL_TEXTURE_2D names.
+    texture = _egl.ffi.new('unsigned int *')
+    _egl.gles_lib.glGenTextures(1, texture)
+    egl_image.texture_id = texture[0]
   _egl.active_texture(GL_TEXTURE0)
-  _egl.bind_texture(GL_TEXTURE_EXTERNAL_OES, texture_id)
+  _egl.bind_texture(GL_TEXTURE_EXTERNAL_OES, egl_image.texture_id)
   _egl.image_target_texture(GL_TEXTURE_EXTERNAL_OES, egl_image.egl_image)

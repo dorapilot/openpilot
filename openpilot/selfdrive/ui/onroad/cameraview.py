@@ -7,7 +7,7 @@ from msgq.visionipc import VisionIpcClient, VisionBuf
 from openpilot.common.swaglog import cloudlog
 from openpilot.common.hardware import COMMA_HARDWARE
 from openpilot.system.ui.lib.application import gui_app
-from openpilot.system.ui.lib.egl import init_egl, create_egl_image, destroy_egl_image, bind_egl_image_to_texture, EGLImage
+from openpilot.system.ui.lib.egl import init_egl, create_egl_image, destroy_egl_image, bind_egl_image, EGLImage
 from openpilot.system.ui.widgets import Widget
 from openpilot.selfdrive.ui.ui_state import ui_state
 
@@ -100,7 +100,7 @@ class CameraView(Widget):
       if not init_egl():
         raise RuntimeError("Failed to initialize EGL")
 
-      # Create a 1x1 pixel placeholder texture for EGL image binding
+      # Raylib batches geometry with a 2D placeholder; EGL owns the external texture.
       temp_image = rl.gen_image_color(1, 1, rl.BLACK)
       self.egl_texture = rl.load_texture_from_image(temp_image)
       rl.unload_image(temp_image)
@@ -250,8 +250,8 @@ class CameraView(Widget):
     self.egl_texture.width = self.frame.width
     self.egl_texture.height = self.frame.height
 
-    # Bind the EGL image to our texture
-    bind_egl_image_to_texture(self.egl_texture.id, egl_image)
+    # Bind the EGL image's external texture for the camera shader.
+    bind_egl_image(egl_image)
 
     # Render with shader
     rl.begin_shader_mode(self.shader)
