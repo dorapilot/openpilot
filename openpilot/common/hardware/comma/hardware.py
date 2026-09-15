@@ -338,9 +338,13 @@ class HardwareComma(HardwareBase):
           sudo_write('1689600', f'/sys/devices/system/cpu/cpufreq/policy{n}/scaling_max_freq')
 
     # *** IRQ config ***
+    mainline = os.path.isdir('/sys/bus/platform/devices/5000000.gpu')
+    if mainline and powersave_enabled:
+      # CPU hotplug already moved these IRQs off the disabled big cluster.
+      return
 
     # GPU, modeld core
-    affine_irq(7, "gpu-irq" if os.path.isdir('/sys/bus/platform/devices/5000000.gpu') else "kgsl-3d0")
+    affine_irq(7, "gpu-irq" if mainline else "kgsl-3d0")
 
     # camerad core
     camera_irqs = ("a5", "cci", "cpas_camnoc", "cpas-cdm", "csid", "ife", "csid-lite", "ife-lite")

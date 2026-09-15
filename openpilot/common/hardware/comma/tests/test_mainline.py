@@ -50,6 +50,31 @@ class TestMainlineHardware(OpenpilotTestCase):
         expected += [(6, action) for action in ('a5', 'cci', 'cpas_camnoc', 'cpas-cdm', 'csid', 'ife', 'csid-lite', 'ife-lite')]
         self.assertEqual([c.args for c in irq.call_args_list], expected)
 
+  def test_mainline_power_save_irq_targets(self):
+    device = hardware.HardwareComma()
+    device.__dict__['amplifier'] = None
+    online = set(range(8))
+    assignments = []
+
+    def write(value, path):
+      cpu = int(path.split('/cpu')[-1].split('/')[0])
+      online.add(cpu) if value == '1' else online.discard(cpu)
+
+    def affine(cpu, action):
+      if cpu not in online:
+        raise OSError(errno.EINVAL, 'IRQ target CPU is offline')
+      assignments.append((cpu, action))
+
+    with patch.object(hardware.os.path, 'isdir', return_value=True), \
+         patch.object(hardware.os.path, 'exists', return_value=False), \
+         patch.object(hardware, 'sudo_write', side_effect=write), \
+         patch.object(hardware, 'affine_irq', side_effect=affine):
+      for power_save in (False, True, False):
+        device.set_power_save(power_save)
+        self.assertEqual(online, set(range(4 if power_save else 8)))
+    self.assertEqual(assignments.count((7, 'gpu-irq')), 2)
+    self.assertEqual(assignments.count((6, 'a5')), 2)
+
   def test_i2c_bus_discovery(self):
     for device, default, bus in [('890000.i2c', 1, 4), ('a88000.i2c', 0, 10), ('890000.i2c', 1, None)]:
       paths = [] if bus is None else [f'/sys/bus/platform/devices/{device}/i2c-{bus}']
