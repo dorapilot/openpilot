@@ -44,8 +44,18 @@ class TestSetupInstaller(unittest.TestCase):
             self.assertEqual(request.full_url, url)
             return urlopen(remote.as_uri(), **kwargs)
 
-          with patch.object(urllib.request, 'urlopen', side_effect=open_request):
+          with patch.object(urllib.request, 'urlopen', side_effect=open_request) as request:
             namespace['_download_thread'](state)
+          if not bundled and not custom:
+            request.assert_not_called()
+            self.assertFalse(destination.exists())
+            self.assertFalse(source_record.exists())
+            app.request_close.assert_not_called()
+            if board == 'tici':
+              state.download_failed.assert_called_once_with(url, 'Bundled dorapilot installer is missing.')
+            else:
+              self.assertEqual(state._download_failed_reason, 'Bundled dorapilot installer is missing.')
+            continue
           self.assertEqual(destination.read_bytes(), b'\x7fELFbundled' if bundled and not custom else b'\x7fELFremote')
           self.assertEqual(source_record.read_text(), url)
           self.assertEqual(state.download_progress, 100)

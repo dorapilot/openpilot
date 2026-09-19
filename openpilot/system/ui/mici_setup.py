@@ -32,7 +32,7 @@ from openpilot.selfdrive.ui.mici.widgets.button import BigButton, GreyBigButton
 
 NetworkType = log.DeviceState.NetworkType
 
-OPENPILOT_URL = "https://github.com/commaai/vamOS/releases/download/liberation-day-7.2/installer_dorapilot"
+OPENPILOT_URL = "https://github.com/dorapilot/openpilot"
 USER_AGENT = f"AGNOSSetup-{HARDWARE.get_os_version()}"
 
 BUNDLED_INSTALLER_PATH = "/usr/comma/installer_dorapilot"
@@ -517,14 +517,18 @@ class Setup(Widget):
     try:
       import tempfile
 
+      url = self.download_url
+      if url == OPENPILOT_URL:
+        if not os.path.isfile(BUNDLED_INSTALLER_PATH):
+          self._download_failed_reason = "Bundled dorapilot installer is missing."
+          return
+        url = f"file://{BUNDLED_INSTALLER_PATH}"
+
       fd, tmpfile = tempfile.mkstemp(prefix="installer_")
 
       headers = {"User-Agent": USER_AGENT,
                  "X-openpilot-serial": HARDWARE.get_serial(),
                  "X-openpilot-device-type": HARDWARE.get_device_type()}
-      url = self.download_url
-      if url == OPENPILOT_URL and os.path.isfile(BUNDLED_INSTALLER_PATH):
-        url = f"file://{BUNDLED_INSTALLER_PATH}"
       req = urllib.request.Request(url, headers=headers)
 
       with open(tmpfile, 'wb') as f, urllib.request.urlopen(req, timeout=30) as response:
