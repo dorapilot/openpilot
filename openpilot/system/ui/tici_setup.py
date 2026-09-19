@@ -30,7 +30,7 @@ BODY_FONT_SIZE = 80
 BUTTON_HEIGHT = 160
 BUTTON_SPACING = 50
 
-OPENPILOT_URL = "https://installer.comma.ai/dorapilot/liberation-day-7.2"
+OPENPILOT_URL = "https://github.com/commaai/vamOS/releases/download/liberation-day-7.2/installer_dorapilot"
 USER_AGENT = f"AGNOSSetup-{HARDWARE.get_os_version()}"
 
 INSTALLER_DESTINATION_PATH = "/tmp/installer"

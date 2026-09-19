@@ -3,7 +3,8 @@ from pathlib import Path
 
 Import('env', 'arch', 'common')
 
-if GetOption('extras') and arch == "comma_arm64":
+installer_target = "openpilot/selfdrive/ui/installer/installers/installer_dorapilot"
+if arch == "comma_arm64" and (GetOption('extras') or installer_target in COMMAND_LINE_TARGETS):
   # build installers
   raylib_dir = Path(importlib.util.find_spec("raylib").submodule_search_locations[0]) / "install"
   raylib_env = env.Clone()
@@ -19,6 +20,7 @@ if GetOption('extras') and arch == "comma_arm64":
     ("openpilot_test", f"{release}-staging"),
     ("openpilot_nightly", "nightly"),
     ("openpilot_internal", "nightly-dev"),
+    ("dorapilot", "liberation-day-7.2"),
   ]
 
   cont = raylib_env.Command("installer/continue_openpilot.o", "installer/continue_openpilot.sh",
@@ -31,6 +33,8 @@ if GetOption('extras') and arch == "comma_arm64":
                               "ld -r -b binary -o $TARGET $SOURCE")
   for name, branch in installers:
     d = {'BRANCH': f"'\"{branch}\"'"}
+    if name == "dorapilot":
+      d['INSTALLER_GIT_URL'] = "'\"https://github.com/dorapilot/openpilot.git\"'"
     if "internal" in name:
       d['INTERNAL'] = "1"
 
