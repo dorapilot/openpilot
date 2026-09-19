@@ -47,6 +47,9 @@ class ModelState:
     self.model_run = pickle.load(open_file_chunked(str(MODEL_PKL_PATH)))
     with open(MODELS_DIR / f'dm_warp_{cam_w}x{cam_h}_tinygrad.pkl', "rb") as f:
       self.image_warp = pickle.load(f)
+    for jit in (self.image_warp, self.model_run):
+      assert jit.captured is not None
+      _ = jit.captured.linear
 
   def run(self, buf: VisionBuf, calib: np.ndarray, transform: np.ndarray) -> tuple[np.ndarray, float]:
     self.numpy_inputs['calib'][0,:] = calib

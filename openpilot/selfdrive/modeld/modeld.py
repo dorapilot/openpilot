@@ -19,7 +19,6 @@ from openpilot.cereal.messaging import PubMaster, SubMaster
 from openpilot.cereal.services import SERVICE_LIST
 from openpilot.cereal.visionipc import VisionStreamType
 from msgq.visionipc import VisionIpcClient, VisionBuf
-from opendbc.car.car_helpers import get_demo_car_params
 from openpilot.common.swaglog import cloudlog
 from openpilot.common.params import Params
 from openpilot.common.filter_simple import FirstOrderFilter
@@ -198,6 +197,8 @@ class ModelState:
       direct_camera_frames=self.direct_camera_frames)
     self.parser = Parser()
     self.run_model = jits['run_model'][(cam_w,cam_h)]
+    assert self.run_model.captured is not None
+    _ = self.run_model.captured.linear
 
   def slice_outputs(self, model_outputs: np.ndarray, output_slices: dict[str, slice]) -> dict[str, np.ndarray]:
     parsed_model_outputs = {k: model_outputs[np.newaxis, v] for k,v in output_slices.items()}
@@ -342,6 +343,7 @@ def main(demo=False):
   meta_extra = FrameMeta()
 
   if demo:
+    from opendbc.car.car_helpers import get_demo_car_params
     CP = get_demo_car_params()
   else:
     CP = messaging.log_from_bytes(params.get("CarParams", block=True), car.CarParams)
