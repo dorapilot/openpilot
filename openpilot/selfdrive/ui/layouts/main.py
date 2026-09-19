@@ -123,9 +123,12 @@ class MainLayout(Widget):
     self._set_mode_for_state()
 
   def _render_main_content(self):
+    # A sidebar click must not reach the newly opened layout in the same frame.
+    layout = self._layouts[self._current_mode]
+    content_rect = self._content_rect if self._sidebar.is_visible else self._rect
+
     # Render sidebar
     if self._sidebar.is_visible:
       self._sidebar.render(self._sidebar_rect)
 
-    content_rect = self._content_rect if self._sidebar.is_visible else self._rect
-    self._layouts[self._current_mode].render(content_rect)
+    layout.render(content_rect)
