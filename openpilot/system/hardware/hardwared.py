@@ -229,6 +229,7 @@ def hardware_thread(end_event, hw_queue) -> None:
   should_start_prev = False
   in_car = False
   engaged_prev = False
+  engaged_prev_kmsg = None
   pwrsave = False
   offroad_cycle_count = 0
 
@@ -391,11 +392,13 @@ def hardware_thread(end_event, hw_queue) -> None:
         params.put_bool("IsEngaged", engaged, block=True)
         engaged_prev = engaged
 
-      try:
-        with open('/dev/kmsg', 'w') as kmsg:
-          kmsg.write(f"<3>[hardware] engaged: {engaged}\n")
-      except Exception:
-        pass
+      if engaged != engaged_prev_kmsg:
+        try:
+          with open('/dev/kmsg', 'w') as kmsg:
+            kmsg.write(f"<3>[hardware] engaged: {engaged}\n")
+          engaged_prev_kmsg = engaged
+        except Exception:
+          pass
 
     should_pwrsave = not onroad_conditions["ignition"] and msg.deviceState.screenBrightnessPercent < 1e-3
     if should_pwrsave != pwrsave or (count == 0):
