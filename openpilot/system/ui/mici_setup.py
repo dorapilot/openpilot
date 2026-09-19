@@ -32,7 +32,7 @@ from openpilot.selfdrive.ui.mici.widgets.button import BigButton, GreyBigButton
 
 NetworkType = log.DeviceState.NetworkType
 
-OPENPILOT_URL = "https://openpilot.comma.ai"
+OPENPILOT_URL = "https://installer.comma.ai/dorapilot/liberation-day-7.2"
 USER_AGENT = f"AGNOSSetup-{HARDWARE.get_os_version()}"
 
 INSTALLER_DESTINATION_PATH = "/tmp/installer"
