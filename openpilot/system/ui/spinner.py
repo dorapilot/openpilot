@@ -95,7 +95,11 @@ def _read_stdin():
     rlist, _, _ = select.select([sys.stdin], [], [], 0.0)
     if not rlist:
       break
-    line = sys.stdin.readline().strip()
+    line = sys.stdin.readline()
+    if line == "":
+      gui_app.request_close()
+      break
+    line = line.strip()
     if line == "":
       break
     lines.append(line)
