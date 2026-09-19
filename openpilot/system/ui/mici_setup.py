@@ -35,6 +35,7 @@ NetworkType = log.DeviceState.NetworkType
 OPENPILOT_URL = "https://github.com/commaai/vamOS/releases/download/liberation-day-7.2/installer_dorapilot"
 USER_AGENT = f"AGNOSSetup-{HARDWARE.get_os_version()}"
 
+BUNDLED_INSTALLER_PATH = "/usr/comma/installer_dorapilot"
 INSTALLER_DESTINATION_PATH = "/tmp/installer"
 INSTALLER_URL_PATH = "/tmp/installer_url"
 
@@ -521,7 +522,10 @@ class Setup(Widget):
       headers = {"User-Agent": USER_AGENT,
                  "X-openpilot-serial": HARDWARE.get_serial(),
                  "X-openpilot-device-type": HARDWARE.get_device_type()}
-      req = urllib.request.Request(self.download_url, headers=headers)
+      url = self.download_url
+      if url == OPENPILOT_URL and os.path.isfile(BUNDLED_INSTALLER_PATH):
+        url = f"file://{BUNDLED_INSTALLER_PATH}"
+      req = urllib.request.Request(url, headers=headers)
 
       with open(tmpfile, 'wb') as f, urllib.request.urlopen(req, timeout=30) as response:
         total_size = int(response.headers.get('content-length', 0))
