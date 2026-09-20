@@ -1,5 +1,7 @@
 #pragma once
 
+// has to be in this order
+#include "third_party/linux/include/v4l2-controls.h"
 #include <linux/videodev2.h>
 #include <poll.h>
 

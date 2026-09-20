@@ -12,7 +12,7 @@
 #include <media/msm_media_info.h>
 
 // has to be in this order
-#include <linux/v4l2-controls.h>
+#include "third_party/linux/include/v4l2-controls.h"
 #include <linux/videodev2.h>
 #define V4L2_QCOM_BUF_FLAG_CODECCONFIG 0x00020000
 #define V4L2_QCOM_BUF_FLAG_EOS 0x02000000

@@ -3,7 +3,7 @@
 #include <assert.h>
 #include <cerrno>
 #include <climits>
-#include <linux/v4l2-controls.h>
+#include "third_party/linux/include/v4l2-controls.h"
 #include <linux/videodev2.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
