@@ -256,6 +256,13 @@ def verify_agnos_update(manifest_path: str, target_slot_number: int) -> bool:
   return all(verify_partition(target_slot_number, partition) for partition in update)
 
 
+def verify_current_images(manifest_path: str, current_slot_number: int) -> bool:
+  # only full_check partitions are verifiable here: the others carry a hash written
+  # past the image when flashed, which a factory flash never writes
+  update = json.load(open(manifest_path))
+  return all(verify_partition(current_slot_number, p) for p in update if p['full_check'])
+
+
 if __name__ == "__main__":
   import argparse
   import logging
@@ -264,6 +271,7 @@ if __name__ == "__main__":
                                    formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
   parser.add_argument("--verify", action="store_true", help="Verify and perform swap if update ready")
+  parser.add_argument("--verify-current", action="store_true", help="Verify the running slot matches the manifest")
   parser.add_argument("--swap", action="store_true", help="Verify and perform swap, downloads if necessary")
   parser.add_argument("manifest", help="Manifest json")
   args = parser.parse_args()
@@ -271,7 +279,13 @@ if __name__ == "__main__":
   logging.basicConfig(level=logging.INFO)
 
   target_slot_number = get_target_slot_number()
-  if args.verify:
+  if args.verify_current:
+    try:
+      exit(0 if verify_current_images(args.manifest, 1 - target_slot_number) else 1)
+    except OSError:
+      logging.exception("Could not read the running slot, assuming it's up to date")
+      exit(0)
+  elif args.verify:
     if verify_agnos_update(args.manifest, target_slot_number):
       swap(args.manifest, target_slot_number, logging)
       exit(0)
