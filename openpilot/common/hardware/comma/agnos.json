@@ -2,8 +2,8 @@
   {
     "name": "boot",
     "url": "https://github.com/commaai/vamOS/releases/download/liberation-day-7.2/boot.img.xz",
-    "hash": "b5822999596decbb8b5943a9e8d44a7e219cdacefd6f7d6cc9e4798b6cbc48d7",
-    "hash_raw": "b5822999596decbb8b5943a9e8d44a7e219cdacefd6f7d6cc9e4798b6cbc48d7",
+    "hash": "aba7d56fb888d0561bb43f41521e7660c09585107aedd52f2303128783f919dc",
+    "hash_raw": "aba7d56fb888d0561bb43f41521e7660c09585107aedd52f2303128783f919dc",
     "size": 17573888,
     "sparse": false,
     "full_check": true,
@@ -12,8 +12,8 @@
   {
     "name": "system",
     "url": "https://github.com/commaai/vamOS/releases/download/liberation-day-7.2/system.img.xz",
-    "hash": "75b5546ef549770150a19149f6a102a38460f3b223aa43310ded511d74d1060e",
-    "hash_raw": "75b5546ef549770150a19149f6a102a38460f3b223aa43310ded511d74d1060e",
+    "hash": "07fe3e82bb15f55a22be0500e66b49c19d65a6d85e4b3b9f020fd6a8f38302d3",
+    "hash_raw": "07fe3e82bb15f55a22be0500e66b49c19d65a6d85e4b3b9f020fd6a8f38302d3",
     "size": 6442450944,
     "sparse": false,
     "full_check": false,
